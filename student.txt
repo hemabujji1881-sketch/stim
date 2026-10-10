@@ -1,0 +1,241 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+st.set_page_config(
+    page_title="Student Details Dashboard",
+    page_icon="🎓",
+    layout="wide"
+)
+
+st.title("🎓 Student Details Dashboard")
+st.write("Explore student information using interactive filters and graphs.")
+
+# Sample data for demonstration
+sample_data = {
+    "Student Name": [
+        "Anjali", "Bhavya", "Chandana", "Divya", "Eshwar",
+        "Farah", "Geetha", "Harish", "Indu", "Kiran"
+    ],
+    "Gender": [
+        "Female", "Female", "Female", "Female", "Male",
+        "Female", "Female", "Male", "Female", "Male"
+    ],
+    "Roll No": [
+        "101", "102", "103", "104", "105",
+        "106", "107", "108", "109", "110"
+    ],
+    "Branch": [
+        "CSE", "CSE", "ECE", "CSE", "ECE",
+        "EEE", "CSE", "EEE", "ECE", "CSE"
+    ],
+    "Department": [
+        "Computer Science", "Computer Science",
+        "Electronics", "Computer Science", "Electronics",
+        "Electrical", "Computer Science", "Electrical",
+        "Electronics", "Computer Science"
+    ],
+    "Father Name": [
+        "Ramesh", "Suresh", "Mohan", "Ravi", "Kumar",
+        "Salim", "Prasad", "Raju", "Reddy", "Krishna"
+    ],
+    "Mother Name": [
+        "Lakshmi", "Radha", "Sita", "Padma", "Anitha",
+        "Ayesha", "Uma", "Latha", "Sarala", "Devi"
+    ],
+    "Address": [
+        "Area A", "Area B", "Area A", "Area C", "Area B",
+        "Area C", "Area A", "Area B", "Area C", "Area A"
+    ]
+}
+
+sample_df = pd.DataFrame(sample_data)
+
+# CSV upload
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Student CSV",
+    type=["csv"]
+)
+
+if uploaded_file is not None:
+    try:
+        df = pd.read_csv(uploaded_file)
+        st.sidebar.success("CSV uploaded successfully!")
+    except Exception as e:
+        st.error(f"Unable to read CSV: {e}")
+        st.stop()
+else:
+    df = sample_df.copy()
+    st.info("Showing sample data. Upload your own student CSV to begin.")
+
+# Required columns
+required_columns = list(sample_data.keys())
+
+missing = [c for c in required_columns if c not in df.columns]
+
+if missing:
+    st.error("Missing columns: " + ", ".join(missing))
+    st.write("Required columns:", required_columns)
+    st.stop()
+
+# Clean data
+df = df[required_columns].copy()
+
+for col in required_columns:
+    df[col] = df[col].fillna("Not Provided").astype(str).str.strip()
+    df[col] = df[col].replace("", "Not Provided")
+
+# Sidebar filters
+st.sidebar.header("🔎 Student Filters")
+
+def multiselect_filter(label, column):
+    options = sorted(df[column].unique().tolist())
+    return st.sidebar.multiselect(
+        label,
+        options,
+        default=options
+    )
+
+selected_names = multiselect_filter("Student Name", "Student Name")
+selected_gender = multiselect_filter("Gender", "Gender")
+selected_branch = multiselect_filter("Branch", "Branch")
+selected_department = multiselect_filter(
+    "Department", "Department"
+)
+
+filtered_df = df[
+    df["Student Name"].isin(selected_names)
+    & df["Gender"].isin(selected_gender)
+    & df["Branch"].isin(selected_branch)
+    & df["Department"].isin(selected_department)
+]
+
+# Summary cards
+st.subheader("📌 Student Summary")
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("Total Students", len(filtered_df))
+c2.metric(
+    "Male Students",
+    (filtered_df["Gender"].str.lower() == "male").sum()
+)
+c3.metric(
+    "Female Students",
+    (filtered_df["Gender"].str.lower() == "female").sum()
+)
+c4.metric("Branches", filtered_df["Branch"].nunique())
+
+if filtered_df.empty:
+    st.warning("No students match the selected filters.")
+    st.stop()
+
+# Graph 1: Gender distribution
+st.subheader("📊 Gender Distribution")
+
+gender_counts = (
+    filtered_df["Gender"]
+    .value_counts()
+    .rename_axis("Gender")
+    .reset_index(name="Students")
+)
+
+fig1 = px.pie(
+    gender_counts,
+    names="Gender",
+    values="Students",
+    title="Students by Gender",
+    hole=0.4
+)
+st.plotly_chart(fig1, use_container_width=True)
+
+# Graph 2: Students by branch
+st.subheader("📚 Students by Branch")
+
+branch_counts = (
+    filtered_df.groupby("Branch")
+    .size()
+    .reset_index(name="Students")
+)
+
+fig2 = px.bar(
+    branch_counts,
+    x="Branch",
+    y="Students",
+    color="Branch",
+    text="Students",
+    title="Branch-wise Student Count"
+)
+st.plotly_chart(fig2, use_container_width=True)
+
+# Graph 3: Department distribution
+st.subheader("🏫 Students by Department")
+
+dept_counts = (
+    filtered_df.groupby("Department")
+    .size()
+    .reset_index(name="Students")
+)
+
+fig3 = px.bar(
+    dept_counts,
+    x="Department",
+    y="Students",
+    color="Department",
+    text="Students",
+    title="Department-wise Student Count"
+)
+st.plotly_chart(fig3, use_container_width=True)
+
+# Graph 4: Gender across branches
+st.subheader("👥 Gender Across Branches")
+
+branch_gender = (
+    filtered_df.groupby(["Branch", "Gender"])
+    .size()
+    .reset_index(name="Students")
+)
+
+fig4 = px.bar(
+    branch_gender,
+    x="Branch",
+    y="Students",
+    color="Gender",
+    barmode="group",
+    text="Students",
+    title="Branch-wise Gender Comparison"
+)
+st.plotly_chart(fig4, use_container_width=True)
+
+# Graph 5: Department and gender comparison
+st.subheader("📈 Department and Gender Comparison")
+
+fig5 = px.bar(
+    filtered_df,
+    x="Department",
+    color="Gender",
+    barmode="stack",
+    title="Gender Distribution by Department"
+)
+st.plotly_chart(fig5, use_container_width=True)
+
+# Student details table
+st.subheader("📋 Student Details")
+
+st.dataframe(
+    filtered_df,
+    use_container_width=True,
+    hide_index=True
+)
+
+# Download filtered data
+csv_data = filtered_df.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="⬇️ Download Filtered Student Data",
+    data=csv_data,
+    file_name="student_details.csv",
+    mime="text/csv"
+)
+
+st.caption("Student Details Dashboard | Built with Streamlit and Plotly")
